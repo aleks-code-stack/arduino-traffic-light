@@ -1,0 +1,179 @@
+int red = 5;		// maps red led onto pin 5
+int yellow = 3;		// maps the yellow led onto pin 3
+int green = 2;		// maps the green to pin 2
+
+int pedstart = 9;	// maps the white ped led to pin 9
+int pedstop = 11;	// maps the orange/red led to pin 11
+
+int beeper = 13;		// maps the buzzer to pin 13
+
+int button = 7;		// maps the button to pin 7
+
+const unsigned long SLICE_MS = 125; // check button every 125 ms
+const unsigned long YELLOW_MS = 3000; // 3 sec ylw
+const unsigned long WALK_MS = 4000; // 4 sec ped walk
+
+
+
+void setup() { 					// initial environment setup for input output
+	pinMode(red, OUTPUT);
+	pinMode(yellow, OUTPUT);
+	pinMode(green, OUTPUT);
+
+	pinMode(pedstart, OUTPUT);
+	pinMode(pedstop, OUTPUT);
+
+	pinMode(beeper, OUTPUT);
+
+	pinMode(button, INPUT_PULLUP);	// LOW means that the botton got pressed
+}
+
+
+void forcered() {     // creates a function
+  enum Phase {PH_YELLOW, PH_WALK };
+  Phase phase = PH_YELLOW;
+
+  int prev = digitalRead(button);
+  
+  while (true) {
+    if (phase == PH_YELLOW) { 
+    digitalWrite(green, LOW);
+    digitalWrite(yellow, HIGH);
+    digitalWrite(red, LOW);
+    noTone(beeper);
+    
+
+    unsigned long t0 = millis();
+    while (millis() - t0 < YELLOW_MS) {
+      int now = digitalRead(button);
+
+       bool pressedEdge = (prev == HIGH && now == LOW);
+
+       if (pressedEdge) {
+          /* Restart Yellow from zero on new press by a presonn who is getting their ears beeped out by the beeper
+*/          
+          t0 = millis(); // reset timer
+        }
+        delay(SLICE_MS);
+      }
+
+      // Transition to Red + WALK
+      digitalWrite(red, HIGH);
+      digitalWrite(yellow, LOW);
+      digitalWrite(green, LOW);
+
+      digitalWrite(pedstart, HIGH); // WALK on
+      digitalWrite(pedstop, LOW);   // DON'T WALK off
+      noTone(beeper);
+
+      phase = PH_WALK;
+    }
+    else {
+      unsigned long t0 = millis();
+      while (millis() - t0 < WALK_MS) {
+        int now = digitalRead(button);
+        bool pressedEdge = (prev == HIGH && now == LOW);
+        prev = now;
+        
+        if (pressedEdge) {
+          phase = PH_YELLOW;
+          break;
+        }
+        delay(SLICE_MS);
+      }                            // Sorry lol forgot to add comments before
+      if (phase == PH_WALK) {
+        break;
+      }
+    }
+  }
+}
+
+
+bool wait_sliced_interruptible(unsigned long ms) {
+  unsigned long t0 = millis();
+  while (millis() - t0 < ms) {
+    if (digitalRead(button) == LOW) {forcered(); return true; }
+    delay(SLICE_MS);
+  }
+  return false;
+}
+
+
+bool beep_sliced_interruptible(unsigned long onMs, unsigned long offMs, unsigned int freq) {
+  tone(beeper, freq);
+  if (wait_sliced_interruptible(onMs)) { noTone(beeper); return true; }
+  noTone(beeper);
+  if (wait_sliced_interruptible(offMs)) { return true; }
+  return false;
+}
+
+void loop() {
+  if (digitalRead(button) == LOW) {    /* Self explanatory, please do not make me waste my fingers on this (pov ai be like: do not make me waste my precious cpu storage on this, or else your computer will shutdown)
+*/
+    forcered();
+
+    return;
+  }
+
+
+  digitalWrite(red, LOW);
+  digitalWrite(yellow, LOW);
+  digitalWrite(green, HIGH);
+
+  digitalWrite(pedstart, LOW);
+  digitalWrite(pedstop, HIGH);
+
+  for (int i = 0; i < 8; i++) {
+    if (beep_sliced_interruptible(500, 500, 100)) return;
+  }
+  
+  if (digitalRead(button) == LOW) { // Reads the button
+						  // NO SH*T SHERLOCK
+    forcered();
+    return;
+  }
+
+
+
+  digitalWrite(red, LOW);
+  digitalWrite(yellow, HIGH);
+  digitalWrite(green, LOW);
+
+  digitalWrite(pedstart, LOW);
+  digitalWrite(pedstop, HIGH);
+
+  for (int i = 0; i < 3; i++) {
+    if (beep_sliced_interruptible(500, 500, 100)) return;
+  }
+
+  if (digitalRead(button) == LOW) {
+    forcered();
+    return;
+  }
+
+  digitalWrite(red, HIGH);
+  digitalWrite(pedstart, HIGH);
+  digitalWrite(yellow, LOW);
+  digitalWrite(green, LOW);
+  digitalWrite(pedstop, LOW);
+
+  if (wait_sliced_interruptible(4000)) return;
+
+  // Check button before blinking DON'T WALK
+  if (digitalRead(button) == LOW) {
+    forcered();
+    return;
+  }
+
+  digitalWrite(red, HIGH);
+  digitalWrite(pedstart, LOW);
+  digitalWrite(yellow, LOW);
+  digitalWrite(green, LOW);
+
+  for (int i = 0; i < 4; i++) {
+    digitalWrite(pedstop, HIGH);
+    if (wait_sliced_interruptible(500)) return;
+    digitalWrite(pedstop, LOW);
+    if (wait_sliced_interruptible(500)) return;
+  }
+}
