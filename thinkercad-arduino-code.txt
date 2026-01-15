@@ -90,7 +90,7 @@ void forcered() {     // creates a function
                       // Without this function, button presses would do nothing
 
   // YELLOW PHASE - cars need warning before red light
-  
+
   digitalWrite(green, LOW);     // Turn OFF the green traffic light
                                 // LOW = 0 volts = LED off
                                 // We turn green off because we're switching to yellow
@@ -110,7 +110,7 @@ void forcered() {     // creates a function
                                 // noTone() stops the tone() function from making sound
                                 // We stop beeping during yellow because only green/don't-walk needs audio warnings
                                 // Without this, the buzzer might keep beeping from before
-  
+
   int prev = digitalRead(button);   // Read the button's current state and save it in "prev"
                                     // digitalRead returns HIGH if button is NOT pressed, LOW if pressed
                                     // We need this to detect when button goes from NOT-pressed to pressed (an "edge")
@@ -120,16 +120,16 @@ void forcered() {     // creates a function
                                 // millis() counts milliseconds since the Arduino started running
                                 // We save this starting time so we can measure how long yellow light has been on
                                 // Without this, we wouldn't know when to switch from yellow to red
-  
+
   // This loop keeps the yellow light on for YELLOW_MS milliseconds (3 seconds)
   // It also watches for button presses and restarts the timer if button is pressed again
-  
+
   while (millis() - t0 < YELLOW_MS) {   // Keep looping as long as we haven't reached the yellow time limit
                                         // millis() - t0 = how much time has passed since we started yellow phase
                                         // If less time has passed than YELLOW_MS (3000), keep looping
                                         // This keeps yellow on for exactly 3 seconds (unless restarted by button)
                                         // Without this condition, the loop would run forever
-    
+
     int now = digitalRead(button);      // Read the button's current state RIGHT NOW
                                         // This tells us if button is pressed (LOW) or not pressed (HIGH) at this moment
                                         // We need the current state to compare with the previous state
@@ -144,20 +144,20 @@ void forcered() {     // creates a function
                 // This updates "prev" so that on the next loop, we can compare the NEW current state to this one
                 // This is CRITICAL for edge detection to work correctly
                 // Without this line, prev stays frozen at the first value forever, breaking edge detection
-    
+
     if (pressedEdge) {  // If we detected a button press edge (button JUST got pressed)
                         // This code only runs when pressedEdge is TRUE (button went from released to pressed)
                         // We want to restart the yellow timer to give impatient people more warning time
                         // Without this check, the code inside would run even when button wasn't pressed
-      
+
       /* Restart Yellow from zero on new press by a presonn who is getting their ears beeped out by the beeper */
-      
+
       t0 = millis();    // Reset the timer to RIGHT NOW
                         // This makes the yellow phase start over from 0 seconds
                         // If someone presses again during yellow, they get another full 3 seconds of yellow
                         // Without this, pressing the button during yellow would do nothing
     }
-    
+
     delay(SLICE_MS);    // Pause for 125 milliseconds before checking button again
                         // delay() stops everything for the specified time
                         // We use 125ms because it's fast enough to feel responsive but not wasteful
@@ -168,7 +168,7 @@ void forcered() {     // creates a function
   // Now we switch to RED light with WALK signal for pedestrians
 
   // WALK PHASE - pedestrians can cross, cars must stop
-  
+
   digitalWrite(red, HIGH);      // Turn ON the red traffic light
                                 // HIGH = 5 volts = LED on
                                 // Red tells cars to STOP
@@ -200,7 +200,7 @@ void forcered() {     // creates a function
                                 // Without this, beeper might keep making noise from before
 
   // Wait for the full walk time (4 seconds) to let pedestrians cross
-  
+
   t0 = millis();                // Get the current time and save it
                                 // This is our new starting point for measuring the WALK phase duration
                                 // Without this, we wouldn't know when the walk phase started
@@ -209,16 +209,63 @@ void forcered() {     // creates a function
                                     // millis() - t0 = how much time has passed since WALK started
                                     // This keeps WALK signal on for exactly 4 seconds
                                     // Without this, walk phase would end immediately (dangerous for pedestrians)
-    
+
     delay(SLICE_MS);    // Pause for 125 milliseconds
                         // This prevents the loop from running millions of times per second
                         // We don't check the button here because walk phase should finish once started (safety)
                         // Without this, the Arduino would waste power running this loop too fast
   }
-  
+
   // Walk phase is done (4 seconds have passed)
-  // Now this function ends and we return to wherever we were called from (the main loop)
-  // The main loop will continue with its normal cycle
+  // Now blink DON'T WALK to warn pedestrians before returning to normal cycle
+
+  // BLINK WARNING PHASE - warn pedestrians that crossing time is ending
+
+  digitalWrite(red, HIGH);      // Keep red light ON (cars still stopped)
+                                // Cars must keep stopping during the warning phase
+                                // Without this, red might turn off too early (dangerous)
+
+  digitalWrite(pedstart, LOW);  // Turn OFF WALK signal
+                                // Walk time is over, pedestrians shouldn't start crossing now
+                                // Without this, WALK would stay on during blink warning (confusing)
+
+  digitalWrite(yellow, LOW);    // Make sure yellow is OFF
+                                // Only red should be on right now
+                                // Without this, yellow might be on (shouldn't happen but be safe)
+
+  digitalWrite(green, LOW);     // Make sure green is OFF
+                                // Only red should be on right now
+                                // Without this, green might be on (shouldn't happen but be safe)
+
+  // Blink DON'T WALK 4 times to warn pedestrians before returning to normal cycle
+
+  for (int i = 0; i < 4; i++) {     // Loop 4 times to create 4 blinks
+                                    // Each blink is on for 0.5s, off for 0.5s = 1 second per blink
+                                    // 4 blinks = 4 seconds of warning before returning to normal cycle
+                                    // Without this loop, DON'T WALK wouldn't blink (no warning when button was pressed)
+
+    digitalWrite(pedstop, HIGH);    // Turn ON DON'T WALK signal (start of blink)
+                                    // HIGH = LED on
+                                    // This is the "on" part of the blink
+                                    // Without this, there would be no blink (LED stays off)
+
+    delay(500);                     // Keep it on for 500ms
+                                    // 500ms is long enough to see the blink clearly
+                                    // We use simple delay here instead of wait_sliced_interruptible because pedestrian safety requires the blink to complete
+                                    // Without this, blink would be instant (too fast to see)
+
+    digitalWrite(pedstop, LOW);     // Turn OFF DON'T WALK signal (end of blink)
+                                    // LOW = LED off
+                                    // This is the "off" part of the blink
+                                    // Without this, LED would stay on (not a blink, just solid light)
+
+    delay(500);                     // Keep it off for 500ms
+                                    // 500ms gap between blinks makes pattern clear
+                                    // Without this, next blink would start immediately (too fast, looks like flickering)
+  }
+
+  // Done with forcered(), return to normal loop cycle
+  // The main loop will start over from green light
 }
 
 
@@ -228,7 +275,7 @@ bool wait_sliced_interruptible(unsigned long ms) { // This function waits for a 
                                                     // "sliced" means we check the button every SLICE_MS (125ms) instead of waiting the whole time
                                                     // "interruptible" means button presses can interrupt the wait
                                                     // Without this function, we'd have to copy/paste the same waiting code everywhere
-  
+
   unsigned long t0 = millis();  // Record the starting time
                                 // This is when we started waiting
                                 // We need this to calculate how much time has passed
@@ -364,7 +411,7 @@ void loop() {   // This is the main loop that runs over and over forever after s
                                 // Without this, pedestrians wouldn't have a clear signal to wait
 
   // Make 8 beeps during green phase (each beep is 0.5s on + 0.5s off = 1 second, so 8 seconds total of green)
-  
+
   for (int i = 0; i < 8; i++) {     // Loop 8 times (i starts at 0, counts up: 0,1,2,3,4,5,6,7)
                                     // Each loop makes one beep pattern
                                     // 8 beeps = 8 seconds of green light time
@@ -375,7 +422,7 @@ void loop() {   // This is the main loop that runs over and over forever after s
                                                             // "return" exits loop() immediately if button pressed
                                                             // Without this, button presses during green would be ignored
   }
-  
+
   if (digitalRead(button) == LOW) { // Reads the button
 						  // NO SH*T SHERLOCK
                           // Check button again after green phase ends
@@ -414,7 +461,7 @@ void loop() {   // This is the main loop that runs over and over forever after s
                                 // Without this, there would be no pedestrian signal during yellow
 
   // Make 3 beeps during yellow phase (3 beeps × 1 second each = 3 seconds of yellow)
-  
+
   for (int i = 0; i < 3; i++) {     // Loop 3 times to make 3 beeps
                                     // Each beep is 1 second (500ms on + 500ms off)
                                     // 3 seconds gives drivers time to slow down
@@ -467,7 +514,7 @@ void loop() {   // This is the main loop that runs over and over forever after s
                                                 // Without this wait, WALK would flash on for 0 seconds (too fast to see)
 
   // Check button one more time before starting DON'T WALK blink warning
-  
+
   if (digitalRead(button) == LOW) { // Check if button is pressed
                                     // This catches button presses right after WALK time ends
                                     // Without this, button press here would be ignored
@@ -499,8 +546,8 @@ void loop() {   // This is the main loop that runs over and over forever after s
                                 // Only red should be on right now
                                 // Without this, green might be on (shouldn't happen but be safe)
 
-  // Blink DON'T WALK 4 times to warn pedestrians that red phase is ending soon
-  
+  // Blink DON'T WALK 4 times to warn pedestrians that crossing time is over
+
   for (int i = 0; i < 4; i++) {     // Loop 4 times to create 4 blinks
                                     // Each blink is on for 0.5s, off for 0.5s = 1 second per blink
                                     // 4 blinks = 4 seconds of warning before cycle restarts
@@ -526,7 +573,7 @@ void loop() {   // This is the main loop that runs over and over forever after s
                                                     // 500ms gap between blinks makes pattern clear
                                                     // Without this, next blink would start immediately (too fast, looks like flickering)
   }
-  
+
   // End of loop() function
   // Arduino automatically calls loop() again from the top
   // This makes the cycle repeat forever: green → yellow → red with blink → back to green → ...
